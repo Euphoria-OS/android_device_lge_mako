@@ -156,4 +156,6 @@ EXTENDED_FONT_FOOTPRINT := true
 
 MALLOC_IMPL := dlmalloc
 
+BOARD_HARDWARE_CLASS := device/lge/mako/cmhw/
+
 -include vendor/lge/mako/BoardConfigVendor.mk
