@@ -21,6 +21,10 @@ PRODUCT_BUILD_PROP_OVERRIDES += PRODUCT_NAME="occam" BUILD_FINGERPRINT="google/o
 # Enable Torch
 #PRODUCT_PACKAGES += Torch
 
+# TouchControl package.
+PRODUCT_PACKAGES += \
+	TouchControl
+
 # Copy device specific prebuilt files.
 PRODUCT_COPY_FILES += \
     vendor/eos/prebuilt/common/bootanimations/BOOTANIMATION-1280x768.zip:system/media/bootanimation.zip
