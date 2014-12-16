@@ -16,7 +16,7 @@ PRODUCT_MODEL := Nexus 4
 PRODUCT_MANUFACTURER := LGE
 
 # Set build fingerprint / ID / Product Name ect.
-PRODUCT_BUILD_PROP_OVERRIDES += PRODUCT_NAME="occam" BUILD_FINGERPRINT="google/occam/mako:5.0.1/LRX22C/1602158:user/release-keys" PRIVATE_BUILD_DESC="occam-user 5.0.1 LRX22C 1602158 release-keys"
+PRODUCT_BUILD_PROP_OVERRIDES += PRODUCT_NAME=occam BUILD_FINGERPRINT=google/occam/mako:5.0.1/LRX22C/1602158:user/release-keys PRIVATE_BUILD_DESC="occam-user 5.0.1 LRX22C 1602158 release-keys"
 
 # Enable Torch
 #PRODUCT_PACKAGES += Torch
