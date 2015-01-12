@@ -21,3 +21,4 @@ type persist_wifi_file, file_type;
 
 type sysfs_rmnet, fs_type, sysfs_type;
 type sysfs_mpdecision, fs_type, sysfs_type;
+type sysfs_hardware, fs_type, sysfs_type;
