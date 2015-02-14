@@ -123,9 +123,7 @@ BOARD_SEPOLICY_UNION += \
        domain.te \
        file.te \
        file_contexts \
-       gamma_dev.te \
        hostapd.te \
-       kcal_dev.te \
        kickstart.te \
        mediaserver.te \
        mpdecision.te \
@@ -137,13 +135,11 @@ BOARD_SEPOLICY_UNION += \
        rmt.te \
        sensors.te \
        surfaceflinger.te \
-       system_app.te \
        system_server.te \
        tee.te \
        te_macros \
        thermald.te \
-       ueventd.te \
-       vibe_dev.te
+       ueventd.te
 
 
 BOARD_CHARGER_ENABLE_SUSPEND := true
