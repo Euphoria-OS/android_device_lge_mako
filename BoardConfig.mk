@@ -129,7 +129,6 @@ BOARD_SEPOLICY_UNION += \
        rmt.te \
        sensors.te \
        surfaceflinger.te \
-       system_app.te \
        system_server.te \
        tee.te \
        te_macros \
