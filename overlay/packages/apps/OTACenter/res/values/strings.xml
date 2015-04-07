@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ * Copyright (C) 2015 Euphoria-OS
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+-->
+
+<resources>
+    <string name="xda_url">http://forum.xda-developers.com/nexus-4/development/rom-euphoria-os-1-0-t2997338</string>
+    <string name="xda_summary">Visit the Nexus 4 XDA thread</string>
+    <string name="changelog_url">https://plus.google.com/106575705593326563158/posts/PHW36Vnr8yF</string>
+    <string name="xml_url_kitkat">https://www.dropbox.com/s/ssqjr5onze7k1wj/ota_file.xml?raw=1</string>
+</resources>
