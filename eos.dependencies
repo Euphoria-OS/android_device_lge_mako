@@ -3,6 +3,6 @@
    "remote":      "github",
    "repository":  "Euphoria-OS/android_kernel_msm",
    "target_path": "kernel/lge/mako",
-   "revision":    "lollipop-mako"
+   "revision":    "lollipop-5.0-mako"
  }
 ]
