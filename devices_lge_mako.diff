@@ -1,0 +1,407 @@
+diff --git a/BoardConfig.mk b/BoardConfig.mk
+index 6d8072b..b7894f3 100644
+--- a/BoardConfig.mk
++++ b/BoardConfig.mk
+@@ -68,15 +68,10 @@ TARGET_USES_OVERLAY := true
+ TARGET_USES_SF_BYPASS := true
+ TARGET_USES_C2D_COMPOSITON := true
+ 
+-# Enable dex-preoptimization to speed up first boot sequence
+-ifeq ($(HOST_OS),linux)
+-  ifeq ($(TARGET_BUILD_VARIANT),user)
+-    ifeq ($(WITH_DEXPREOPT),)
+-      WITH_DEXPREOPT := true
+-    endif
+-  endif
+-endif
+-WITH_DEXPREOPT_BOOT_IMG_ONLY ?= true
++WITH_DEXPREOPT_BOOT_IMG_ONLY ?= false
++WITH_DEXPREOPT := false
++DONT_DEXPREOPT_PREBUILTS := true
++
+ 
+ TARGET_RECOVERY_FSTAB = device/lge/mako/fstab.mako
+ TARGET_USERIMAGES_USE_EXT4 := true
+@@ -96,6 +91,7 @@ BOARD_USES_CAMERA_FAST_AUTOFOCUS := true
+ BOARD_HAL_STATIC_LIBRARIES := libdumpstate.mako
+ 
+ BOARD_VENDOR_QCOM_GPS_LOC_API_HARDWARE := $(TARGET_BOARD_PLATFORM)
++BOARD_VENDOR_QCOM_LOC_PDK_FEATURE_SET := true
+ TARGET_NO_RPC := true
+ 
+ TARGET_RELEASETOOLS_EXTENSIONS := device/lge/mako
+@@ -103,34 +99,6 @@ TARGET_RELEASETOOLS_EXTENSIONS := device/lge/mako
+ BOARD_SEPOLICY_DIRS += \
+        device/lge/mako/sepolicy
+ 
+-BOARD_SEPOLICY_UNION += \
+-       bluetooth_loader.te \
+-       bridge.te \
+-       camera.te \
+-       conn_init.te \
+-       device.te \
+-       domain.te \
+-       file.te \
+-       file_contexts \
+-       hostapd.te \
+-       kickstart.te \
+-       mediaserver.te \
+-       mpdecision.te \
+-       netmgrd.te \
+-       property.te \
+-       property_contexts \
+-       qmux.te \
+-       rild.te \
+-       rmt.te \
+-       sensors.te \
+-       surfaceflinger.te \
+-       system_server.te \
+-       tee.te \
+-       te_macros \
+-       thermald.te \
+-       ueventd.te
+-
+-
+ BOARD_CHARGER_ENABLE_SUSPEND := true
+ 
+ USE_DEVICE_SPECIFIC_CAMERA:= true
+diff --git a/device.mk b/device.mk
+index e7d4da5..7fb7ca6 100644
+--- a/device.mk
++++ b/device.mk
+@@ -134,6 +134,11 @@ PRODUCT_PROPERTY_OVERRIDES += \
+ PRODUCT_PROPERTY_OVERRIDES += \
+ 	ro.sf.lcd_density=320
+ 
++PRODUCT_PROPERTY_OVERRIDES += \
++	telephony.lteOnGsmDevice=1 \
++	ro.telephony.default_network=9 \
++	ro.ril.def.preferred.network=9
++
+ # Audio Configuration
+ # FIXME: Remove persist.audio.handset.mic and persist.audio.fluence.mode
+ #        while switching new audio HAL from legacy HAL
+diff --git a/init.mako.rc b/init.mako.rc
+index 73edc13..99cb4bc 100644
+--- a/init.mako.rc
++++ b/init.mako.rc
+@@ -23,36 +23,23 @@ on early-init
+     chown system system /sys/kernel/debug/kgsl/proc
+ 
+ on init
+-    # See storage config details at http://source.android.com/tech/storage/
+-    mkdir /mnt/shell/emulated 0700 shell shell
+-    mkdir /storage/emulated 0555 root root
+ 
+     # Set permissions for persist partition
+     mkdir /persist 0771 system system
+     mkdir /firmware 0771 system system
+ 
+-    export EXTERNAL_STORAGE /storage/emulated/legacy
+-    export EMULATED_STORAGE_SOURCE /mnt/shell/emulated
+-    export EMULATED_STORAGE_TARGET /storage/emulated
+-
+-    # Support legacy paths
+-    symlink /storage/emulated/legacy /sdcard
+-    symlink /storage/emulated/legacy /mnt/sdcard
+-    symlink /storage/emulated/legacy /storage/sdcard0
+-    symlink /mnt/shell/emulated/0 /storage/emulated/legacy
+-
+-    # Setup custom emergency number list based on
+     # the MCC. This is needed by RIL.
+     setprop persist.radio.custom_ecc "1"
+     setprop persist.radio.custom_ecc_mcc "{234,235,424,426,427,430,431:999},{334:060,066},{422:9999},{730:133}"
+     setprop persist.radio.custom_ecc_mcc_ex "{450:111,112,113,119,122,125,127},{724:190},{425:100,101,102}"
+     setprop persist.radio.custom_ecc_voice "{515:117},{452:113,114,115}"
+     setprop persist.radio.custom_ecc_hard "911,*911,#911,112,999,000,08,118,120,122,110,119,995,111,113,125,127,133"
++    symlink /sdcard /mnt/sdcard
++    symlink /sdcard /storage/sdcard0
+ 
+ on fs
+     mount_all ./fstab.mako
+     restorecon_recursive /persist
+-    setprop ro.crypto.fuse_sdcard true
+ 
+ on early-boot
+     # set RLIMIT_MEMLOCK to 64MB
+@@ -376,10 +363,6 @@ service charger /sbin/healthd -c
+     critical
+     seclabel u:r:healthd:s0
+ 
+-# virtual sdcard daemon running as media_rw (1023)
+-service sdcard /system/bin/sdcard -u 1023 -g 1023 -l /data/media /mnt/shell/emulated
+-    class late_start
+-
+ service thermald /system/bin/thermald
+     class main
+     group radio system
+diff --git a/overlay/frameworks/base/core/res/res/values/config.xml b/overlay/frameworks/base/core/res/res/values/config.xml
+index bb55f50..cf20920 100644
+--- a/overlay/frameworks/base/core/res/res/values/config.xml
++++ b/overlay/frameworks/base/core/res/res/values/config.xml
+@@ -214,6 +214,12 @@
+     <!-- The restoring is handled by modem if it is true -->
+     <bool translatable="false" name="skip_restoring_network_selection">true</bool>
+ 
++    <!-- The RadioAccessFamilies supported by the device.
++         Empty is viewed as "all".  Only used on devices which
++         don't support RIL_REQUEST_GET_RADIO_CAPABILITY
++         format is UMTS|LTE|... -->
++    <string translatable="false" name="config_radio_access_family">GSM | WCDMA | LTE</string>
++
+     <!-- Set to true to add links to Cell Broadcast app from Settings and MMS app. -->
+     <bool name="config_cellBroadcastAppLinks">true</bool>
+ 
+@@ -243,9 +249,6 @@
+          rather than the uevent framework. -->
+     <bool name="config_useDevInputEventForAudioJack">true</bool>
+ 
+-    <!-- Component name of the default wallpaper. This will be ImageWallpaper if not specified -->
+-    <string name="default_wallpaper_component" translatable="false">com.android.phasebeam/.PhaseBeamWallpaper</string>
+-
+     <!-- The default iface on which to monitor data use -->
+     <string name="config_datause_iface" translatable="false">rmnet_usb0</string>
+ 
+diff --git a/overlay/packages/apps/Phone b/overlay/packages/apps/Phone
+deleted file mode 120000
+index 92808b9..0000000
+--- a/overlay/packages/apps/Phone
++++ /dev/null
+@@ -1 +0,0 @@
+-../services/Telephony
+\ No newline at end of file
+diff --git a/sepolicy/camera.te b/sepolicy/camera.te
+index 3d37ca3..2e3bd69 100644
+--- a/sepolicy/camera.te
++++ b/sepolicy/camera.te
+@@ -5,8 +5,6 @@ type camera_exec, exec_type, file_type;
+ # Started by init
+ init_daemon_domain(camera)
+ 
+-allow camera self:process execmem;
+-
+ # Interact with other media devices
+ allow camera camera_device:dir search;
+ allow camera { video_device camera_device }:chr_file rw_file_perms;
+@@ -25,3 +23,6 @@ allow camera camera_data_file:file create_file_perms;
+ # Connect to sensor socket (/data/app/sensor_ctl_socket)
+ unix_socket_connect(camera, sensors, sensors)
+ allow camera sensors_socket:sock_file read;
++
++
++allow camera system_file:file execmod;
+diff --git a/sepolicy/device.te b/sepolicy/device.te
+index b6e993a..c58aa9e 100644
+--- a/sepolicy/device.te
++++ b/sepolicy/device.te
+@@ -1,6 +1,6 @@
+ type wlan_device, dev_type;
+ 
+-type diag_device, dev_type;
++type diag_device, dev_type, mlstrustedobject;
+ 
+ # Kickstart device used by QC qcks
+ type kickstart_device, dev_type;
+diff --git a/sepolicy/file.te b/sepolicy/file.te
+index 05a832b..fbe4b3d 100644
+--- a/sepolicy/file.te
++++ b/sepolicy/file.te
+@@ -1,23 +1,32 @@
+-# Qualcomm MSM Interface (QMI) socket
++# Default type for anything under /firmware
++type firmware_file, fs_type, contextmount_type;
++
+ type qmuxd_socket, file_type;
+ type sensors_socket, file_type;
+ type camera_socket, file_type;
++type thermald_socket, file_type;
+ 
++type diag_logs, file_type, data_file_type, mlstrustedobject;
+ type sensors_data_file, file_type, data_file_type;
+-
+-type kickstart_data_file, file_type, data_file_type;
++type time_data_file, file_type, data_file_type;
++type ramdump_data_file, file_type, data_file_type;
+ 
+ type mpdecision_socket, file_type;
+ 
+-# Default type for anything under /firmware
++
++type kickstart_data_file, file_type, data_file_type;
+ type radio_efs_file, fs_type, contextmount_type;
+ 
+ # Persist firmware types
+ type persist_file, file_type;
+ type persist_bluetooth_file, file_type;
++type persist_camera_file, file_type;
++type persist_data_file, file_type;
+ type persist_drm_file, file_type;
+ type persist_sensors_file, file_type;
+ type persist_wifi_file, file_type;
+ 
+ type sysfs_rmnet, fs_type, sysfs_type;
+ type sysfs_mpdecision, fs_type, sysfs_type;
++type sysfs_surfaceflinger, fs_type, sysfs_type;
++type sysfs_smdcntl_open_timeout, fs_type, sysfs_type;
+diff --git a/sepolicy/file_contexts b/sepolicy/file_contexts
+index 4944f75..0ffc050 100644
+--- a/sepolicy/file_contexts
++++ b/sepolicy/file_contexts
+@@ -84,6 +84,10 @@
+ # Block labeling
+ /dev/block/mmcblk0p[89]            u:object_r:efs_block_device:s0
+ /dev/block/mmcblk0                 u:object_r:root_block_device:s0
++/dev/block/platform/msm_sdcc\.1/by-name/userdata     u:object_r:userdata_block_device:s0
++/dev/block/platform/msm_sdcc\.1/by-name/cache        u:object_r:cache_block_device:s0
++
++
+ 
+ /data/cam_socket[0-9]              u:object_r:camera_socket:s0
+ /data/app/sensor_ctl_socket        u:object_r:sensors_socket:s0
+diff --git a/sepolicy/kickstart.te b/sepolicy/kickstart.te
+index 93091cb..82c79ee 100644
+--- a/sepolicy/kickstart.te
++++ b/sepolicy/kickstart.te
+@@ -39,3 +39,4 @@ allow kickstart tombstone_data_file:file r_file_perms;
+ # Investigate denial on system_data_file:dir.
+ allow kickstart system_data_file:dir { write add_name remove_name };
+ auditallow kickstart system_data_file:dir { write add_name remove_name };
++
+diff --git a/sepolicy/mediaserver.te b/sepolicy/mediaserver.te
+index f82f16d..f24f990 100644
+--- a/sepolicy/mediaserver.te
++++ b/sepolicy/mediaserver.te
+@@ -7,3 +7,6 @@ unix_socket_send(mediaserver, mpdecision, mpdecision)
+ # Permit mediaserver to create sockets with no specific SELinux class.
+ # TODO: Investigate the specific type of socket.
+ allow mediaserver self:socket create_socket_perms;
++
++# For text relocations in /system/vendor/lib/libmmjpeg.so
++allow mediaserver system_file:file execmod;
+diff --git a/sepolicy/netmgrd.te b/sepolicy/netmgrd.te
+index 69cce04..f409c31 100644
+--- a/sepolicy/netmgrd.te
++++ b/sepolicy/netmgrd.te
+@@ -5,22 +5,17 @@ type netmgrd_exec, exec_type, file_type;
+ # Started by init
+ init_daemon_domain(netmgrd)
+ 
++# Uses network sockets.
++net_domain(netmgrd)
++
+ # Starts as (root,radio) changes to (radio,radio)
+ allow netmgrd self:capability { setuid setgid net_admin net_raw };
+ 
+-# Support modprobe??
++# Triggers a sys_module denial, but kernel has CONFIG_MODULES=n.
+ dontaudit netmgrd self:capability sys_module;
+ 
+-allow netmgrd self:udp_socket { create ioctl };
+ allow netmgrd self:netlink_socket create_socket_perms;
+-allow netmgrd self:netlink_route_socket { create_socket_perms nlmsg_read nlmsg_write };
+-allow netmgrd self:packet_socket create_socket_perms;
+-
+-# set net.rmnet* properties.
+-unix_socket_connect(netmgrd, property, init)
+-allow netmgrd radio_prop:property_service set;
+-auditallow netmgrd radio_prop:property_service set;
+-allow netmgrd net_radio_prop:property_service set;
++allow netmgrd self:netlink_route_socket nlmsg_write;
+ 
+ # Talk to qmuxd (qmux_radio)
+ qmux_socket(netmgrd)
+@@ -31,3 +26,18 @@ allow netmgrd shell_exec:file rx_file_perms;
+ 
+ # Runs /system/bin/ip addr flush dev <device> commands.
+ allow netmgrd system_file:file rx_file_perms;
++
++# Talk to init over the property socket
++unix_socket_connect(netmgrd, property, init)
++# Set net.rmnet0.* values
++allow netmgrd radio_prop:property_service set;
++auditallow netmgrd radio_prop:property_service set;
++allow netmgrd net_radio_prop:property_service set;
++
++# Access to /proc/sys/net/*
++allow netmgrd proc_net:file rw_file_perms;
++allow netmgrd proc_net:dir r_dir_perms;
++
++# Allw cell data (in some cases this is needed)
++allow netmgrd netmgrd:packet_socket { create bind read write };
++
+diff --git a/sepolicy/property.te b/sepolicy/property.te
+index 4deda57..8483793 100644
+--- a/sepolicy/property.te
++++ b/sepolicy/property.te
+@@ -1 +1,2 @@
+ type ctl_rmt_prop, property_type;
++type ctl_mpdecision, property_type;
+diff --git a/sepolicy/qmux.te b/sepolicy/qmux.te
+index 716a87f..240e0b0 100644
+--- a/sepolicy/qmux.te
++++ b/sepolicy/qmux.te
+@@ -14,3 +14,6 @@ allow qmux radio_device:chr_file rw_file_perms;
+ 
+ # wake lock access
+ wakelock_use(qmux)
++
++allow radio system_file:file execmod;
++allow qmux sysfs_smdcntl_open_timeout:file rw_file_perms;
+diff --git a/sepolicy/rmt.te b/sepolicy/rmt.te
+index e76bac9..bf32eb7 100644
+--- a/sepolicy/rmt.te
++++ b/sepolicy/rmt.te
+@@ -10,7 +10,10 @@ allow rmt self:capability { setuid setgid };
+ 
+ # opens and reads /dev/block/mmcblk0
+ allow rmt root_block_device:blk_file r_file_perms;
+-allow rmt root_block_device:dir r_dir_perms;
++allow rmt block_device:dir r_dir_perms;
++
++# Needed for ioprio_set(IOPRIO_WHO_PROCESS, 0, IOPRIO_CLASS_RT << IOPRIO_CLASS_SHIFT);
++allow rmt self:capability sys_admin;
+ 
+ # Allow shared memory logging access
+ allow rmt shared_log_device:chr_file rw_file_perms;
+@@ -21,6 +24,8 @@ allow rmt cgroup:dir { create add_name };
+ # Wake lock access
+ wakelock_use(rmt)
+ 
+-# Access property service to set ctl.rmt_storage
++# Allow access to /dev/uio0.
++allow rmt uio_device:chr_file rw_file_perms;
++
+ unix_socket_connect(rmt, property, init)
+ allow rmt ctl_rmt_prop:property_service set;
+diff --git a/sepolicy/surfaceflinger.te b/sepolicy/surfaceflinger.te
+index 2fd3955..c776c2c 100644
+--- a/sepolicy/surfaceflinger.te
++++ b/sepolicy/surfaceflinger.te
+@@ -3,4 +3,4 @@ allow surfaceflinger sysfs:file rw_file_perms;
+ # Read from /data/local/tmp
+ allow surfaceflinger shell_data_file:dir search;
+ allow surfaceflinger shell_data_file:file { open getattr read };
+-allow surfaceflinger shell_data_file:lnk_file read;
++#allow surfaceflinger shell_data_file:lnk_file read;
+diff --git a/sepolicy/system_server.te b/sepolicy/system_server.te
+index fe6fce0..40dcfdc 100644
+--- a/sepolicy/system_server.te
++++ b/sepolicy/system_server.te
+@@ -22,3 +22,7 @@ allow system_server sensors_data_file:file r_file_perms;
+ allow system_server radio_device:chr_file r_file_perms;
+ 
+ allow system_server self:netlink_socket create_socket_perms;
++
++# Reading from /persist/wifi/.macaddr
++allow system_server persist_file:dir r_dir_perms;
++r_dir_file(system_server, persist_wifi_file)
+diff --git a/sepolicy/ueventd.te b/sepolicy/ueventd.te
+index e82337d..ca386db 100644
+--- a/sepolicy/ueventd.te
++++ b/sepolicy/ueventd.te
+@@ -1,2 +1,3 @@
+-allow ueventd { radio_efs_file wifi_data_file }:dir search;
+-allow ueventd { radio_efs_file wifi_data_file }:file r_file_perms;
++allow ueventd { firmware_file wifi_data_file }:dir r_dir_perms;
++allow ueventd { firmware_file wifi_data_file }:file r_file_perms;
++allow ueventd sysfs_smdcntl_open_timeout:file setattr;
