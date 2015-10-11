@@ -15,3 +15,4 @@
 #
 
 add_lunch_combo aosp_mako-userdebug
+add_lunch_combo eos_mako-userdebug
